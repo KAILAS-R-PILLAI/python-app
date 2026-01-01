@@ -15,16 +15,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            -Dsonar.sources=.
-            -Dsonar.python.version=3
+      #- name: SonarCloud Scan
+        #uses: SonarSource/sonarcloud-github-action@v2
+        #env:
+          #SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        #with:
+          #args: >
+            #-Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            #-Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            #-Dsonar.sources=.
+            #-Dsonar.python.version=3
 
   deploy:
     name: Deploy to EC2

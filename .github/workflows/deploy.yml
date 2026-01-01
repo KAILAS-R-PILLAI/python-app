@@ -71,6 +71,6 @@ jobs:
             source venv/bin/activate
             python -m pip install --upgrade pip
             pip install -r requirements.txt
-            pkill -f "python.*app.py" || true
-            nohup python src/app.py &
-            ps aux | grep app.py
+            tmux kill-session -t flask_app || true
+            tmux new-session -d -s flask_app 'python src/app.py'
+            tmux ls

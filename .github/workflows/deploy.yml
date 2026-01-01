@@ -1,67 +1,75 @@
-name: CI-CD Python App with SonarCloud
+name: Python CI/CD with SonarCloud and EC2
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  sonar:
-    name: SonarCloud Analysis
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      #- name: SonarCloud Scan
-        #uses: SonarSource/sonarcloud-github-action@v2
-        #env:
-          #SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        #with:
-          #args: >
-            #-Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
-            #-Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            #-Dsonar.sources=.
-            #-Dsonar.python.version=3
-
-  deploy:
-    name: Deploy to EC2
-    needs: sonar
+  test-and-analyze:
+    name: Test & SonarCloud Analysis
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
 
-      - name: Copy files to EC2
+      - name: Create virtual environment and install dependencies
         run: |
-          rsync -avz --delete \
-          --exclude '.git' \
-          --exclude 'venv' \
-          ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/var/www/python-app
+          python3 -m venv venv
+          source venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install coverage flask
 
-      - name: Install dependencies and run app
+      - name: Run tests and generate coverage
         run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          source venv/bin/activate
+          coverage run -m unittest discover -s tests -p "*.py"
+          coverage xml -o coverage.xml
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.sources=src
+            -Dsonar.python.version=3
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: test-and-analyze
+    if: success() 
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy code to EC2 and restart app
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
             cd /var/www/python-app
-
-            if [ ! -d venv ]; then
-              python3 -m venv venv
-            fi
-
+            git pull origin main
             source venv/bin/activate
-            pip install --upgrade pip
             pip install -r requirements.txt
-
-            pkill -f app.py || true
-            nohup venv/bin/python app.py > app.log 2>&1 &
-          EOF
+            # Stop existing Flask app if running
+            pkill -f "python.*app.py" || true
+            nohup python src/app.py &

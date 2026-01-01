@@ -28,7 +28,6 @@ jobs:
           source venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install coverage flask
 
       - name: Run tests and generate coverage
         run: |

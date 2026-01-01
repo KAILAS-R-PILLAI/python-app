@@ -1,0 +1,46 @@
+name: Deploy Python App to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy files to EC2
+        run: |
+          rsync -avz --delete \
+          --exclude '.git' \
+          --exclude 'venv' \
+          ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/var/www/python-app
+
+      - name: Install dependencies and run app
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            cd /var/www/python-app
+
+            if [ ! -d venv ]; then
+              python3 -m venv venv
+            fi
+
+            source venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            pkill -f app.py || true
+            nohup venv/bin/python app.py > app.log 2>&1 &
+          EOF
+

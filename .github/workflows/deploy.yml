@@ -65,12 +65,16 @@ jobs:
           port: 22
           script: |
             cd /var/www/python-app
+
             if [ ! -d "venv" ]; then
               python3 -m venv venv
             fi
+
             source venv/bin/activate
             python -m pip install --upgrade pip
             pip install -r requirements.txt
-            tmux kill-session -t flask_app || true
-            tmux new-session -d -s flask_app 'python src/app.py'
-            tmux ls
+
+            pm2 delete flask_app || true
+            pm2 start /var/www/python-app/venv/bin/python --name flask_app -- src/app.py
+            pm2 save
+            pm2 list

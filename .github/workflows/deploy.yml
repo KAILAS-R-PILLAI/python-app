@@ -72,7 +72,6 @@ jobs:
             source venv/bin/activate
             python -m pip install --upgrade pip
             pip install -r requirements.txt
-
             pm2 delete flask_app || true
             pm2 start venv/bin/gunicorn --name flask_app -- src.app:app -i 2 -b 0.0.0.0:8000
             pm2 save
